@@ -4,9 +4,15 @@ import asyncio
 from functools import wraps
 from typing import Any, Awaitable, Callable
 from fastapi import FastAPI, Query, Request, HTTPException
+from fastapi.staticfiles import StaticFiles
+import logging
+
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Disconnect example")
-
+# Mount the static files directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 async def disconnect_poller(request: Request, result: Any):
     """
@@ -17,11 +23,11 @@ async def disconnect_poller(request: Request, result: Any):
         while not await request.is_disconnected():
             await asyncio.sleep(0.01)
 
-        print("Request disconnected")
+        logger.error("Request disconnected")
 
         return result
     except asyncio.CancelledError:
-        print("Stopping polling loop")
+        logger.error("Stopping polling loop")
 
 
 def cancel_on_disconnect(handler: Callable[[Request], Awaitable[Any]]):
@@ -50,9 +56,9 @@ def cancel_on_disconnect(handler: Callable[[Request], Awaitable[Any]]):
             try:
                 await t
             except asyncio.CancelledError:
-                print(f"{t} was cancelled")
+                logger.info(f"{t} was cancelled")
             except Exception as exc:
-                print(f"{t} raised {exc} when being cancelled")
+                logger.info(f"{t} raised {exc} when being cancelled")
 
         # Return the result if the handler finished first
         if handler_task in done:
@@ -62,7 +68,7 @@ def cancel_on_disconnect(handler: Callable[[Request], Awaitable[Any]]):
         # This is not exactly needed, but it will prevent
         # validation errors if your request handler is supposed
         # to return something.
-        print("Raising an HTTP error because I was disconnected!!")
+        logger.error("Raising an HTTP error because I was disconnected!!")
 
         raise HTTPException(503)
 
@@ -73,15 +79,16 @@ def cancel_on_disconnect(handler: Callable[[Request], Awaitable[Any]]):
 @cancel_on_disconnect
 async def example(
     request: Request,
+    reqid: str = "0000",
     wait: float = Query(..., description="Time to wait, in seconds"),
 ):
     try:
-        print(f"Sleeping for {wait:.2f}")
+        logger.info(f"{reqid} Sleeping for {wait:.2f}")
 
         await asyncio.sleep(wait)
 
-        print("Sleep not cancelled")
+        logger.info(f"{reqid}: Sleep not cancelled")
 
-        return f"I waited for {wait:.2f}s and now this is the result"
+        return f"{reqid} I waited for {wait:.2f}s and now this is the result"
     except asyncio.CancelledError:
-        print("Exiting on cancellation")
+        logger.error(f"{reqid} Exiting on cancellation")

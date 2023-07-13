@@ -3,9 +3,14 @@
 import asyncio
 from typing import Any, Awaitable, TypeVar
 from fastapi import Depends, FastAPI, Query, Request, HTTPException
+from fastapi.staticfiles import StaticFiles
+import logging
+
+logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Disconnect example")
-
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 T = TypeVar("T")
 
@@ -28,9 +33,9 @@ class CancelOnDisconnect:
             while not await self.request.is_disconnected():
                 await asyncio.sleep(0.01)
 
-            print("Request disconnected, exiting poller")
+            logger.error("Request disconnected, exiting poller")
         except asyncio.CancelledError:
-            print("Polling loop cancelled")
+            logger.error("Polling loop cancelled")
 
     async def __call__(self, awaitable: Awaitable[T]) -> T:
         """Run the awaitable and cancel it if the request disconnects"""
@@ -51,9 +56,9 @@ class CancelOnDisconnect:
             try:
                 await t
             except asyncio.CancelledError:
-                print(f"{t} was cancelled")
+                logger.error(f"{t} was cancelled")
             except Exception as exc:
-                print(f"{t} raised {exc} when being cancelled")
+                logger.error(f"{t} raised {exc} when being cancelled")
 
         # This will:
         # - Raise asyncio.CancelledError if the handler was cancelled
@@ -65,21 +70,22 @@ class CancelOnDisconnect:
 @app.get("/example")
 async def example(
     disconnector: CancelOnDisconnect = Depends(CancelOnDisconnect),
+    reqid: str = "0000",
     wait: float = Query(..., description="Time to wait, in seconds"),
 ):
     try:
-        print(f"Sleeping for {wait:.2f}")
+        logger.info(f"{reqid}: Sleeping for {wait:.2f}")
 
         await disconnector(asyncio.sleep(wait))
 
-        print("Sleep not cancelled")
+        logger.info(f"{reqid}: Sleep not cancelled")
 
-        return f"I waited for {wait:.2f}s and now this is the result"
+        return f"{reqid} I waited for {wait:.2f}s and now this is the result"
     except asyncio.CancelledError:
         # You have two options here:
         # 1) Raise a custom exception, will be logged with traceback
         # 2) Raise an HTTPException, won't be logged
         # (The client won't see either)
 
-        print("Exiting on cancellation")
+        logger.error(f"{reqid}: Exiting on cancellation")
         raise HTTPException(503)
