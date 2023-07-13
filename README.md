@@ -24,6 +24,6 @@ python3 -m pip install -r ./requirements.txt
 python3 -m uvicorn app:app --host 0.0.0.0 --port 8000 --reload
 # python3 -m uvicorn app_alt:app --host 0.0.0.0 --port 8001 --reload
 python3 ./test.py
-open localhost:8000
-# open localhost:8001
+open localhost:8000/static/index.html
+# open localhost:8001/static/index.html
 ```
